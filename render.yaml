@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: shiliang-tiaozaoji
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/categories
+    autoDeploy: true

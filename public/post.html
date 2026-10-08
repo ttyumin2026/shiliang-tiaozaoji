@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发布帖子 - 石梁跳蚤集</title>
+  <link rel="icon" href="/logo.png" type="image/png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="nav-bar">
+    <a href="/" class="nav-back">‹ 返回首页</a>
+    <span class="nav-title">发布帖子</span>
+    <span style="width:80px"></span>
+  </div>
+
+  <div class="form-page">
+    <div class="form-card">
+      <!-- 标题 -->
+      <div class="form-item">
+        <div class="form-label">标题</div>
+        <input type="text" class="form-input" id="title" maxlength="30" placeholder="请输入标题（30字内）" oninput="updateCounter('title','titleCounter',30)">
+        <span class="form-counter"><span id="titleCounter">0</span>/30</span>
+      </div>
+
+      <!-- 分类 -->
+      <div class="form-item">
+        <div class="form-label">分类</div>
+        <select class="form-select" id="category">
+          <option value="">请选择分类</option>
+        </select>
+      </div>
+
+      <!-- 内容 -->
+      <div class="form-item">
+        <div class="form-label">内容</div>
+        <textarea class="form-textarea" id="content" maxlength="500" placeholder="请输入详细描述（500字内）" oninput="updateCounter('content','contentCounter',500)"></textarea>
+        <span class="form-counter"><span id="contentCounter">0</span>/500</span>
+      </div>
+
+      <!-- 图片上传 -->
+      <div class="form-item">
+        <div class="form-label">图片（最多9张）</div>
+        <div class="image-list" id="imageList">
+          <div class="image-add" onclick="document.getElementById('fileInput').click()">
+            <span class="plus">+</span>
+            <span class="count"><span id="imgCount">0</span>/9</span>
+          </div>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" multiple style="display:none" onchange="onFileSelect(event)">
+      </div>
+
+      <!-- 联系方式 -->
+      <div class="form-item">
+        <div class="form-label">联系方式</div>
+        <input type="text" class="form-input" id="contact" placeholder="手机号或微信号">
+      </div>
+
+      <!-- 置顶开关 -->
+      <div class="form-item form-switch">
+        <div class="form-label">置顶（带红色"急"标签）</div>
+        <label class="switch">
+          <input type="checkbox" id="isTop">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="onSubmit()">发布</button>
+  </div>
+
+  <!-- 额度用完弹窗 -->
+  <div class="modal-mask" id="quotaModal">
+    <div class="modal-content">
+      <div class="modal-title">额度已用完</div>
+      <div class="modal-desc">当月免费额度（2条）已用完，请购买加量包</div>
+      <div class="qr-code" style="display:flex;align-items:center;justify-content:center;color:#999;font-size:13px;">
+        <span>（替换为你的加量包二维码）</span>
+      </div>
+      <div class="modal-tip">扫码购买加量包</div>
+      <div class="modal-close" onclick="closeQuotaModal()">关闭</div>
+    </div>
+  </div>
+
+  <script>
+    let uploadedImages = []; // 已上传的文件名
+    let categories = [];
+
+    // 加载分类
+    fetch('/api/categories').then(r => r.json()).then(res => {
+      categories = res.data;
+      const sel = document.getElementById('category');
+      categories.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id; opt.textContent = c.name;
+        sel.appendChild(opt);
+      });
+    });
+
+    function updateCounter(inputId, counterId, max) {
+      const len = document.getElementById(inputId).value.length;
+      document.getElementById(counterId).textContent = len;
+    }
+
+    // 选择图片
+    function onFileSelect(e) {
+      const files = Array.from(e.target.files);
+      const remain = 9 - uploadedImages.length;
+      if (remain <= 0) { alert('最多9张图片'); return; }
+      const toUpload = files.slice(0, remain);
+
+      // 上传到服务器
+      const formData = new FormData();
+      toUpload.forEach(f => formData.append('images', f));
+
+      fetch('/api/upload', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(res => {
+          if (res.code === 0) {
+            uploadedImages = uploadedImages.concat(res.data);
+            renderImages();
+          }
+        });
+      e.target.value = '';
+    }
+
+    function renderImages() {
+      const list = document.getElementById('imageList');
+      const html = uploadedImages.map((img, i) => `
+        <div class="image-item">
+          <img src="/uploads/${img}" onclick="previewImage(${i})">
+          <div class="image-delete" onclick="deleteImage(${i})">✕</div>
+        </div>
+      `).join('');
+      const addBtn = `<div class="image-add" onclick="document.getElementById('fileInput').click()">
+        <span class="plus">+</span>
+        <span class="count"><span id="imgCount">${uploadedImages.length}</span>/9</span>
+      </div>`;
+      list.innerHTML = html + (uploadedImages.length < 9 ? addBtn : '');
+      document.getElementById('imgCount').textContent = uploadedImages.length;
+    }
+
+    function deleteImage(index) {
+      uploadedImages.splice(index, 1);
+      renderImages();
+    }
+
+    function previewImage(index) {
+      const urls = uploadedImages.map(img => '/uploads/' + img);
+      window.open(urls[index], '_blank');
+    }
+
+    // 提交
+    function onSubmit() {
+      const title = document.getElementById('title').value.trim();
+      const category = document.getElementById('category').value;
+      const content = document.getElementById('content').value.trim();
+      const contact = document.getElementById('contact').value.trim();
+      const isTop = document.getElementById('isTop').checked;
+
+      if (!title) { alert('请输入标题'); return; }
+      if (!category) { alert('请选择分类'); return; }
+      if (!content) { alert('请输入内容'); return; }
+      if (!contact) { alert('请输入联系方式'); return; }
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.textContent = '发布中...';
+
+      fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, category, content, images: uploadedImages, contact, isTop })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.code === 0) {
+          alert('发布成功');
+          location.href = '/';
+        } else if (res.code === 403) {
+          document.getElementById('quotaModal').classList.add('show');
+        } else {
+          alert(res.msg || '发布失败');
+        }
+        btn.disabled = false;
+        btn.textContent = '发布';
+      })
+      .catch(() => {
+        alert('发布失败，请重试');
+        btn.disabled = false;
+        btn.textContent = '发布';
+      });
+    }
+
+    function closeQuotaModal() {
+      document.getElementById('quotaModal').classList.remove('show');
+    }
+  </script>
+</body>
+</html>

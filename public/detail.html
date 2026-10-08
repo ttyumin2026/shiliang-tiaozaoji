@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>帖子详情 - 石梁跳蚤集</title>
+  <link rel="icon" href="/logo.png" type="image/png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="nav-bar">
+    <a href="/" class="nav-back">‹ 返回首页</a>
+    <span class="nav-title">帖子详情</span>
+    <span style="width:80px"></span>
+  </div>
+
+  <div id="detailContainer" class="detail-page">
+    <div class="loading-tip">加载中...</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const postId = params.get('id');
+
+    if (!postId) {
+      document.getElementById('detailContainer').innerHTML = '<div class="loading-tip">参数错误</div>';
+    } else {
+      fetch('/api/posts/' + postId).then(r => r.json()).then(res => {
+        if (res.code !== 0) {
+          document.getElementById('detailContainer').innerHTML = '<div class="loading-tip">' + res.msg + '</div>';
+          return;
+        }
+        const p = res.data;
+        document.getElementById('detailContainer').innerHTML = `
+          <div class="detail-header">
+            ${p.is_top ? '<div class="top-tag">急</div>' : ''}
+            <div class="detail-title" style="${p.is_top ? 'padding-left:28px' : ''}">${escapeHtml(p.title)}</div>
+            <div class="detail-meta">
+              <span class="post-category">${p.category_name}</span>
+              <span class="post-time">${p.create_time_text}</span>
+            </div>
+          </div>
+          <div class="detail-content">
+            <div class="detail-content-text">${escapeHtml(p.content)}</div>
+            ${p.images && p.images.length > 0 ? `<div class="detail-images" style="margin-top:16px">${p.images.map(img => `<img src="${img}" loading="lazy">`).join('')}</div>` : ''}
+          </div>
+          <div class="detail-contact">
+            <span class="contact-label">联系方式</span>
+            <div class="contact-value">
+              <span class="phone">${escapeHtml(p.contact)}</span>
+              <span class="copy-btn" onclick="copyContact('${escapeHtml(p.contact)}')">复制</span>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    function copyContact(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        alert('已复制到剪贴板');
+      }).catch(() => {
+        // 降级方案
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+        alert('已复制到剪贴板');
+      });
+    }
+
+    function escapeHtml(s) {
+      return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>石梁跳蚤集</title>
+  <link rel="icon" href="/logo.png" type="image/png">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- 品牌头部 -->
+  <div style="background:#fff;padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #f0f0f0">
+    <img src="/logo.png" style="width:36px;height:36px;border-radius:8px">
+    <span style="font-size:20px;font-weight:bold;color:#333">石梁跳蚤集</span>
+  </div>
+  <!-- 搜索栏 -->
+  <div class="search-bar">
+    <div class="search-wrap">
+      <input type="text" id="keyword" placeholder="搜索二手车、租房、招聘..." oninput="onKeywordInput(event)" onkeydown="if(event.key==='Enter')onSearch()">
+      <span id="clearBtn" class="clear-btn" style="display:none" onclick="onClearKeyword()">✕</span>
+    </div>
+  </div>
+
+  <!-- 分类滚动 -->
+  <div class="category-section">
+    <div class="category-list" id="categoryList"></div>
+  </div>
+
+  <!-- 帖子列表 -->
+  <div class="post-list">
+    <div id="postListContainer"></div>
+    <div id="emptyTip" class="empty-tip" style="display:none">暂无帖子，快来发布第一条吧～</div>
+    <div id="loadMore" class="load-more" style="display:none" onclick="loadMore()">加载更多</div>
+  </div>
+
+    <!-- 浮动发帖按钮 -->
+  <a href="/post.html" style="position:fixed;bottom:30px;right:20px;width:56px;height:56px;background:linear-gradient(135deg,#ff6b6b,#ff4d4f);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:28px;box-shadow:0 4px 12px rgba(255,77,79,.4);text-decoration:none;z-index:50">+</a>
+
+  <!-- 底部 -->
+  <div style="text-align:center;padding:30px 16px 60px;color:#999;font-size:12px">
+    <div>石梁跳蚤集 — 本地生活信息发布平台</div>
+    <div style="margin-top:6px">管理员邮箱：323170173@qq.com</div>
+  </div>
+
+  <script>
+    let categories = [];
+    let activeCategory = '';
+    let keyword = '';
+    let page = 1;
+    let hasMore = false;
+    let loading = false;
+
+    // 加载分类
+    fetch('/api/categories').then(r => r.json()).then(res => {
+      categories = res.data;
+      renderCategories();
+    });
+
+    function renderCategories() {
+      const html = categories.map(c => `
+        <div class="category-item" data-id="${c.id}" onclick="onCategoryClick('${c.id}')">
+          <div class="category-icon">${c.icon}</div>
+          <div class="category-name">${c.name}</div>
+        </div>
+      `).join('');
+      document.getElementById('categoryList').innerHTML = html;
+    }
+
+    function onCategoryClick(id) {
+      activeCategory = activeCategory === id ? '' : id;
+      document.querySelectorAll('.category-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.id === activeCategory);
+      });
+      page = 1;
+      loadPosts(true);
+    }
+
+    function onKeywordInput(e) {
+      keyword = e.target.value;
+      document.getElementById('clearBtn').style.display = keyword ? 'inline-block' : 'none';
+    }
+
+    function onClearKeyword() {
+      keyword = '';
+      document.getElementById('keyword').value = '';
+      document.getElementById('clearBtn').style.display = 'none';
+      page = 1;
+      loadPosts(true);
+    }
+
+    function onSearch() {
+      page = 1;
+      loadPosts(true);
+    }
+
+    function loadPosts(refresh) {
+      if (loading) return;
+      loading = true;
+      const params = new URLSearchParams({ page: refresh ? 1 : page });
+      if (activeCategory) params.set('category', activeCategory);
+      if (keyword) params.set('keyword', keyword);
+
+      fetch('/api/posts?' + params).then(r => r.json()).then(res => {
+        const data = res.data;
+        const html = data.list.map(p => `
+          <div class="post-item" onclick="location.href='/detail.html?id=${p.id}'">
+            ${p.is_top ? '<div class="top-tag">急</div>' : ''}
+            <div class="post-content-area" style="${p.is_top ? 'padding-left:28px' : ''}">
+              <div class="post-title">${escapeHtml(p.title)}</div>
+              <div class="post-meta">
+                <span class="post-category">${p.category_name}</span>
+                <span class="post-time">${p.create_time_text}</span>
+              </div>
+              <div class="post-desc">${escapeHtml(p.content)}</div>
+              ${p.images && p.images.length > 0 ? `<div class="post-images">${p.images.slice(0,3).map(img => `<img src="${img}" loading="lazy">`).join('')}</div>` : ''}
+              <div class="post-footer">📞 ${escapeHtml(p.contact)}</div>
+            </div>
+          </div>
+        `).join('');
+
+        const container = document.getElementById('postListContainer');
+        if (refresh) container.innerHTML = html;
+        else container.innerHTML += html;
+
+        document.getElementById('emptyTip').style.display = data.list.length === 0 && refresh ? 'block' : 'none';
+        hasMore = data.hasMore;
+        document.getElementById('loadMore').style.display = hasMore ? 'block' : 'none';
+        if (data.list.length > 0) page++;
+        loading = false;
+      }).catch(() => { loading = false; });
+    }
+
+    function loadMore() {
+      if (hasMore && !loading) loadPosts(false);
+    }
+
+    // 滚动到底部自动加载
+    window.addEventListener('scroll', () => {
+      if (hasMore && !loading && window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+        loadPosts(false);
+      }
+    });
+
+    function escapeHtml(s) {
+      return s ? s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : '';
+    }
+
+    // 初始加载
+    loadPosts(true);
+  </script>
+</body>
+</html>
